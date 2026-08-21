@@ -152,11 +152,27 @@ strat = Strategy(legs=option_legs)
 
 if data_mode == "Live (yfinance)" and chain_calls is not None:
     priced_from_market = sum(1 for l in st.session_state.legs if lookup_market_premium(l) is not None)
-    if priced_from_market < len(st.session_state.legs):
+    total_legs = len(st.session_state.legs)
+    if priced_from_market == total_legs:
+        st.success(f"{priced_from_market}/{total_legs} legs priced from live quotes.")
+    else:
         st.info(
-            f"{priced_from_market}/{len(st.session_state.legs)} legs priced from live quotes; "
+            f"{priced_from_market}/{total_legs} legs priced from live quotes; "
             "the rest fall back to theoretical Black-Scholes pricing (no quote at that strike)."
         )
+
+# Flag legs whose strike is far from spot -- usually a leftover leg from
+# switching presets/tickers rather than an intentional deep ITM/OTM position.
+far_legs = [
+    leg for leg in st.session_state.legs
+    if leg["strike"] < spot * 0.5 or leg["strike"] > spot * 2.0
+]
+if far_legs:
+    strikes_str = ", ".join(f"${l['strike']:.2f}" for l in far_legs)
+    st.warning(
+        f"Strike(s) {strikes_str} are far from the current spot (${spot:,.2f}). "
+        "If this wasn't intentional, check for a leftover leg from an earlier preset or ticker."
+    )
 
 entry_cost = strat.net_entry_cost(spot, rate, vol)
 greeks = strat.net_greeks(spot, rate, vol)
