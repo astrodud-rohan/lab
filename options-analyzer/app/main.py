@@ -55,8 +55,11 @@ with st.sidebar:
             default_vol = atm_iv * 100
         else:
             default_vol = 30.0
+        # Clamp: illiquid chains can report near-zero IV, which would
+        # otherwise fall below the widget's min_value and crash the app.
+        default_vol = max(round(default_vol, 1), 0.1)
         rate = st.number_input("Risk-free rate (%)", value=4.5, step=0.1) / 100
-        vol = st.number_input("Implied volatility (%)", value=round(default_vol, 1), min_value=0.1, step=1.0) / 100
+        vol = st.number_input("Implied volatility (%)", value=default_vol, min_value=0.1, step=1.0) / 100
     else:
         chain_calls, chain_puts = None, None
         spot = st.number_input("Underlying price ($)", value=100.0, min_value=0.01, step=1.0)
