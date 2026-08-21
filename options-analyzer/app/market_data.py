@@ -74,13 +74,14 @@ def estimate_atm_iv(calls_df: pd.DataFrame, puts_df: pd.DataFrame, spot: float) 
     call and put IVs reported by Yahoo. Used as a sane default vol
     input, not a substitute for a real vol surface.
     """
+    MIN_PLAUSIBLE_IV = 0.01 # 1% -- anything below this is treated as bad data
     call_row = nearest_strike_row(calls_df, spot)
     put_row = nearest_strike_row(puts_df, spot)
     ivs = []
     for row in (call_row, put_row):
         if row is not None and pd.notna(row.get("impliedVolatility")):
             iv = float(row["impliedVolatility"])
-            if iv > 0:
+            if iv >= MIN_PLAUSIBLE_IV:
                 ivs.append(iv)
     if not ivs:
         return None
