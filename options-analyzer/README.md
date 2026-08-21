@@ -4,8 +4,8 @@ A web tool for analyzing multi-leg options strategies: payoff diagrams,
 Greeks, breakevens, and probability of profit — built on Black-Scholes.
  
 ## Live demo
- 
-option-analyzer.streamlit.app
+
+https://option-analyzer.streamlit.app/
  
 ## Why this exists
  
