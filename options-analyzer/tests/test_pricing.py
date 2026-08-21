@@ -12,8 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 
 import numpy as np
 import pytest
-from pricing import OptionType, bs_greeks, bs_price, implied_volatility
-from strategy import OptionLeg, Strategy
+from app.pricing import OptionType, bs_greeks, bs_price, implied_volatility
+from app.strategy import OptionLeg, Strategy
 
 
 def test_call_put_parity():

@@ -49,12 +49,25 @@ tests/
 - Net position Greeks (delta/gamma/theta/vega/rho)
 - Breakeven detection (handles multiple breakevens)
 - Probability of profit (lognormal approximation under risk-neutral measure)
+- **Live market data** via `yfinance`: real spot price, real expiration
+  dates, real option chain quotes. When a leg's strike has a live quote,
+  the strategy uses that actual last-traded price instead of theoretical
+  BS price; legs without a quote fall back to BS pricing (and the app
+  tells you which is which). ATM implied vol is estimated from the chain
+  as a sensible default, editable by hand.
+- Manual mode still available for stress-testing hypothetical scenarios
+  (e.g. "what if vol spikes to 60%") that don't reflect current market data.
 
 ## Known limitations / roadmap
 
-- **No live market data yet** — inputs are manual. Next step: pull spot
-  price + implied vol from `yfinance` (free) or a paid feed (Polygon.io,
-  Tradier) for real option chains.
+- **yfinance data quality** — Yahoo's option chain data can be stale or
+  thin for illiquid strikes (wide bid/ask, zero volume). `lastPrice` can
+  reflect a trade from earlier in the session. A v2 should show bid/ask
+  alongside last price and warn on wide spreads.
+- **No rate limit / caching hardening** — currently a 5-min TTL cache
+  per ticker/expiration. Fine for personal use; would need review before
+  many concurrent users hit it (Yahoo has historically throttled/blocked
+  scrapers under heavy load).
 - **European exercise only** — American early-exercise (matters for puts,
   dividend-paying stocks) would need a binomial/trinomial tree; Black-Scholes
   is the right MVP simplification.

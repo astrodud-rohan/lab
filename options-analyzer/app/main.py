@@ -7,6 +7,7 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
+import market_data as md
 from pricing import OptionType
 from strategy import OptionLeg, Strategy
 
@@ -18,11 +19,51 @@ st.caption("Payoff diagrams, Greeks, breakevens, and probability of profit -- bu
 # ---------- Sidebar: market inputs ----------
 with st.sidebar:
     st.header("Market Inputs")
-    spot = st.number_input("Underlying price ($)", value=100.0, min_value=0.01, step=1.0)
-    rate = st.number_input("Risk-free rate (%)", value=4.5, step=0.1) / 100
-    vol = st.number_input("Implied volatility (%)", value=30.0, min_value=0.1, step=1.0) / 100
-    days_to_expiry = st.number_input("Days to expiration", value=30, min_value=1, step=1)
-    t = days_to_expiry / 365
+
+    data_mode = st.radio("Data source", ["Live (yfinance)", "Manual"], horizontal=True)
+
+    if data_mode == "Live (yfinance)":
+        ticker = st.text_input("Ticker", value="AAPL").strip().upper()
+
+        live_spot = md.get_spot_price(ticker) if ticker else None
+        if live_spot is None:
+            st.warning(f"Couldn't fetch a price for '{ticker}'. Check the symbol or switch to Manual.")
+            spot = st.number_input("Underlying price ($)", value=100.0, min_value=0.01, step=1.0)
+        else:
+            st.success(f"{ticker} spot: ${live_spot:,.2f}")
+            spot = live_spot
+
+        expirations = md.get_expirations(ticker) if ticker and live_spot else []
+        chain_calls, chain_puts = None, None
+        if expirations:
+            expiration = st.selectbox("Expiration", expirations)
+            t = md.years_to_expiry(expiration)
+            days_to_expiry = round(t * 365)
+            chain = md.get_option_chain(ticker, expiration)
+            if chain:
+                chain_calls, chain_puts = chain
+                atm_iv = md.estimate_atm_iv(chain_calls, chain_puts, spot)
+            else:
+                atm_iv = None
+        else:
+            days_to_expiry = st.number_input("Days to expiration", value=30, min_value=1, step=1)
+            t = days_to_expiry / 365
+            atm_iv = None
+
+        if atm_iv:
+            st.caption(f"ATM implied vol from chain: {atm_iv*100:.1f}%")
+            default_vol = atm_iv * 100
+        else:
+            default_vol = 30.0
+        rate = st.number_input("Risk-free rate (%)", value=4.5, step=0.1) / 100
+        vol = st.number_input("Implied volatility (%)", value=round(default_vol, 1), min_value=0.1, step=1.0) / 100
+    else:
+        chain_calls, chain_puts = None, None
+        spot = st.number_input("Underlying price ($)", value=100.0, min_value=0.01, step=1.0)
+        rate = st.number_input("Risk-free rate (%)", value=4.5, step=0.1) / 100
+        vol = st.number_input("Implied volatility (%)", value=30.0, min_value=0.1, step=1.0) / 100
+        days_to_expiry = st.number_input("Days to expiration", value=30, min_value=1, step=1)
+        t = days_to_expiry / 365
 
     st.divider()
     st.header("Strategy")
@@ -82,16 +123,37 @@ if not st.session_state.legs:
     st.stop()
 
 # ---------- Build Strategy object ----------
+def lookup_market_premium(leg: dict) -> float | None:
+    """If live chain data is available, use the last-traded price for this strike."""
+    if chain_calls is None or chain_puts is None:
+        return None
+    chain_df = chain_calls if leg["type"] == "call" else chain_puts
+    row = md.nearest_strike_row(chain_df, leg["strike"])
+    if row is None:
+        return None
+    price = row.get("lastPrice")
+    return float(price) if price and price > 0 else None
+
+
 option_legs = [
     OptionLeg(
         option_type=OptionType(leg["type"]),
         strike=leg["strike"],
         expiry_years=t,
         quantity=leg["qty"],
+        premium_paid=lookup_market_premium(leg),
     )
     for leg in st.session_state.legs
 ]
 strat = Strategy(legs=option_legs)
+
+if data_mode == "Live (yfinance)" and chain_calls is not None:
+    priced_from_market = sum(1 for l in st.session_state.legs if lookup_market_premium(l) is not None)
+    if priced_from_market < len(st.session_state.legs):
+        st.info(
+            f"{priced_from_market}/{len(st.session_state.legs)} legs priced from live quotes; "
+            "the rest fall back to theoretical Black-Scholes pricing (no quote at that strike)."
+        )
 
 entry_cost = strat.net_entry_cost(spot, rate, vol)
 greeks = strat.net_greeks(spot, rate, vol)
